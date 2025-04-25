@@ -34,8 +34,8 @@ router.post('/restaurantes', async (req, res) => {
   const { id_rest, nombre, ciudad, direccion, fecha_apertura } = req.body;
   try {
     const result = await connection.query(
-      'INSERT INTO restaurante (nombre, ciudad, direccion, fecha_apertura) VALUES ($1, $2, $3, $4) RETURNING *',
-      [nombre, ciudad, direccion, fecha_apertura]
+      'INSERT INTO restaurante (id_rest, nombre, ciudad, direccion, fecha_apertura) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [id_rest, nombre, ciudad, direccion, fecha_apertura]
     );
     res.status(201).json({ success: true, message: 'Restaurante creado', data: result.rows[0] });
   } catch (error) {
@@ -43,6 +43,7 @@ router.post('/restaurantes', async (req, res) => {
     res.status(500).json({ success: false, message: 'Error al crear restaurante', details: error.message });
   }
 });
+
 
 // Actualizar un restaurante
 router.put('/restaurantes/:id_rest', async (req, res) => {
@@ -77,6 +78,59 @@ router.delete('/restaurantes/:id_rest', async (req, res) => {
   } catch (error) {
     console.error('Error al eliminar restaurante:', error);
     res.status(500).json({ success: false, message: 'Error al eliminar restaurante', details: error.message });
+  }
+});
+router.get('/restaurantes/ventas-totales', async (req, res) => {
+  try {
+    const result = await connection.query(
+      `SELECT r.id_rest, r.nombre, SUM(p.total) as ventas_totales
+       FROM restaurante r
+       JOIN pedido p ON r.id_rest = p.id_rest
+       GROUP BY r.id_rest, r.nombre
+       ORDER BY ventas_totales DESC`
+    );
+
+    res.status(200).json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener ventas por restaurante',
+      details: error.message
+    });
+  }
+});
+router.get('/restaurantes/:id_rest/empleados', async (req, res) => {
+  const { id_rest } = req.params;
+  const { rol } = req.query; // Opcional: filtrar por rol
+
+  try {
+    let query = `SELECT * FROM empleado WHERE id_rest = $1`;
+    const params = [id_rest];
+
+    if (rol) {
+      query += ` AND rol = $2`;
+      params.push(rol);
+    }
+
+    query += ` ORDER BY nombre`;
+
+    const result = await connection.query(query, params);
+
+    res.status(200).json({
+      success: true,
+      data: result.rows,
+      count: result.rows.length,
+      filtro_rol: rol || 'Todos'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener empleados del restaurante',
+      details: error.message
+    });
   }
 });
 

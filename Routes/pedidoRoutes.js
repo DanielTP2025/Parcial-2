@@ -31,11 +31,11 @@ router.get('/pedidos/:id_pedido', async (req, res) => {
 
 // Crear un nuevo pedido
 router.post('/pedidos', async (req, res) => {
-  const { fecha, id_rest, total } = req.body;
+  const { id_pedido, fecha, id_rest, total } = req.body;
   try {
     const result = await connection.query(
-      'INSERT INTO pedido (fecha, id_rest, total) VALUES ($1, $2, $3) RETURNING *',
-      [fecha, id_rest, total]
+      'INSERT INTO pedido (id_pedido, fecha, id_rest, total) VALUES ($1, $2, $3, $4) RETURNING *',
+      [id_pedido, fecha, id_rest, total]
     );
     res.status(201).json({ success: true, message: 'Pedido creado', data: result.rows[0] });
   } catch (error) {
@@ -77,6 +77,77 @@ router.delete('/pedidos/:id_pedido', async (req, res) => {
   } catch (error) {
     console.error('Error al eliminar pedido:', error);
     res.status(500).json({ success: false, message: 'Error al eliminar pedido', details: error.message });
+  }
+});
+// Esta ruta quedará accesible como: /api/mas-vendidos
+router.get('/mas-vendidos', async (req, res) => {
+  const { minimo = 10 } = req.query;
+
+  if (isNaN(minimo)) {
+    return res.status(400).json({
+      success: false,
+      message: 'El parámetro minimo debe ser un número'
+    });
+  }
+
+  try {
+    const result = await connection.query(
+      `SELECT p.id_prod, p.nombre, SUM(dp.cantidad) as total_vendido
+       FROM producto p
+       JOIN detalle_pedido dp ON p.id_prod = dp.id_prod
+       GROUP BY p.id_prod, p.nombre
+       HAVING SUM(dp.cantidad) > $1
+       ORDER BY total_vendido DESC`,
+      [Number(minimo)]
+    );
+
+    res.status(200).json({
+      success: true,
+      data: result.rows,
+      unidades_minimas: Number(minimo)
+    });
+  } catch (error) {
+    console.error('Error en productos más vendidos:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener productos más vendidos',
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+router.get('/pedidos/por-fecha', async (req, res) => {
+  const { fecha } = req.query; // Formato esperado: YYYY-MM-DD
+
+  if (!fecha) {
+    return res.status(400).json({
+      success: false,
+      message: 'Parámetro fecha es requerido',
+      formato: 'YYYY-MM-DD'
+    });
+  }
+
+  try {
+    const result = await connection.query(
+      `SELECT * FROM pedido
+       WHERE DATE(fecha) = $1
+       ORDER BY fecha DESC`,
+      [fecha]
+    );
+
+    res.status(200).json({
+      success: true,
+      fecha_consultada: fecha,
+      data: result.rows,
+      count: result.rows.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener pedidos por fecha',
+      details: error.message
+    });
   }
 });
 
